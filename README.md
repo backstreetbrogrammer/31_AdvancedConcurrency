@@ -11,12 +11,12 @@ Tools used:
 
 ## Table of contents
 
-1. Executor Pattern, Callable and Future
-2. Fork/Join Framework
-3. Advanced Locking and Semaphores
-4. Using Barriers and Latches
-5. CAS operation and Atomic classes
-6. Concurrent Collections
+1. [Executor Pattern, Callable and Future](https://github.com/backstreetbrogrammer/31_AdvancedConcurrency#chapter-01-executor-pattern-callable-and-future)
+2. [Fork/Join Framework](https://github.com/backstreetbrogrammer/31_AdvancedConcurrency#chapter-02-forkjoin-framework)
+3. [Advanced Locking and Semaphores](https://github.com/backstreetbrogrammer/31_AdvancedConcurrency#chapter-03-advanced-locking-and-semaphores)
+4. [Using Barriers and Latches](https://github.com/backstreetbrogrammer/31_AdvancedConcurrency#chapter-04-using-barriers-and-latches)
+5. [CAS operation and Atomic classes](https://github.com/backstreetbrogrammer/31_AdvancedConcurrency#chapter-05-cas-operation-and-atomic-classes)
+6. [Concurrent Collections](https://github.com/backstreetbrogrammer/31_AdvancedConcurrency#chapter-06-concurrent-collections)
 
 ---
 
@@ -457,3 +457,20 @@ tasks that should be run by separate threads. The best use case for `ExecutorSer
 **independent** tasks, such as transactions or requests according to the scheme **"one thread for one task"**.
 
 In contrast, **fork/join** was designed to speed up work that can be broken into smaller pieces recursively.
+
+---
+
+### Chapter 03. Advanced Locking and Semaphores
+
+---
+
+### Chapter 04. Using Barriers and Latches
+
+---
+
+### Chapter 05. CAS operation and Atomic classes
+
+---
+
+### Chapter 06. Concurrent Collections
+
