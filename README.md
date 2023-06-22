@@ -455,6 +455,8 @@ pool manages worker threads of type `ForkJoinWorkerThread`.
 
 **ExecutorService vs Fork/Join**
 
+Fork/Join framework is an implementation of the `ExecutorService` interface for parallel execution.
+
 After the release of Java 7, many developers decided to replace the `ExecutorService` framework with the **Fork/Join
 framework**.
 
@@ -465,7 +467,32 @@ over concurrent execution.
 tasks that should be run by separate threads. The best use case for `ExecutorService` is the processing of
 **independent** tasks, such as transactions or requests according to the scheme **"one thread for one task"**.
 
-In contrast, **fork/join** was designed to speed up work that can be broken into smaller pieces recursively.
+In contrast, **fork/join** was designed to speed up work that can be broken into smaller pieces recursively. For
+example: parallel merge sort, parallel maximum finding etc.
+
+**RecursiveTask<T>**
+
+`RecursiveTask<T>` returns a generic `T` type.
+
+All the tasks we want to execute in parallel is a **subclass** of this class. We have to override the `compute()` method
+that will return the solution of the sub-problem.
+
+**RecursiveAction**
+
+`RecursiveAction` is a task but without any return value.
+
+**ForkJoinPool**
+
+`ForkJoinPool` is a thread-pool for executing fork-join tasks. Number of threads is usually the number of CPU cores.
+These threads use **"work-stealing"** algorithm => it can **"steal"** tasks from other busy threads if done with its own
+tasks.
+
+Main point to note is that a task is **NOT** equivalent to a thread! Tasks are lightweight threads so fork-join will be
+efficient even when there are a huge number of tasks.
+
+Fork/Join Framework can handle the problem of **load-balancing** quite efficiently. 
+
+
 
 ---
 
