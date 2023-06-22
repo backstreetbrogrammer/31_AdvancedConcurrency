@@ -51,6 +51,8 @@ The **Executor Pattern** aims to fix the above-mentioned issues:
 - by creating pools of ready-to-use threads
 - passing task to this pool of threads that will execute it
 
+![Executor Service](ExecutorService.PNG)
+
 ```java
 public interface Executor {
     void execute(Runnable task);
@@ -65,7 +67,7 @@ public interface ExecutorService extends Executor {
 }
 ```
 
-`ExecutorService` is an extension of `Executor` and has got around 12 more methods. The implementations of both
+`ExecutorService` is an extension of `Executor` and has got around 11 more methods. The implementations of both
 interfaces are the same. The factory class `Executors` proposes around 20 more methods to **create executors**.
 
 Code snippet to create a single-thread pool:
@@ -104,6 +106,8 @@ More about **cached** thread pool:
 - create threads **on demand** but will reuse previously constructed threads when they are available
 - keeps **unused** threads for **60 seconds** by default, then terminates them
 
+#### Interview Problem 1 (CLSA): Executor Service - Waiting Queue
+
 **Waiting queue**
 
 Suppose we have a code snippet:
@@ -138,7 +142,7 @@ To summarize the advantages of using **Executor Pattern**:
 - building an executor is **more performance efficient** than creating threads on demand
 - can pass instances of Runnable to an executor - even if there are no threads available in the pool, executor has a
   waiting queue to **handle more tasks** than number of threads in the pool
-- a task can be cancelled by removing it from the waiting queue
+- a task can be **cancelled** by removing it from the waiting queue
 
 #### Callable and Future
 
@@ -157,7 +161,7 @@ There is no way we can know if a task is done or not.
 - No object can be returned
 - No exception can be raised
 
-We need to know if there was any exception raised by the task and also we may need flexibility to get a value returned
+We need to know if there was any exception raised by the task, and also we may need flexibility to get a value returned
 from the task.
 
 In Java 1.5 release, new `Callable` interface was introduced:
@@ -282,7 +286,7 @@ try {
 `ExecutorService` will first stop taking new tasks and then wait up to a specified period of time (900 ms) for all tasks
 to be completed. If that time expires, the execution is stopped immediately.
 
-#### Interview Problem 1 (Barclays): Implement GCD algorithm using Executor Service and Futures
+#### Interview Problem 2 (Merrill Lynch): Implement GCD algorithm using Executor Service and Futures
 
 Greatest Common Divisor (GCD) of two or more integers is the largest integer that divides each of the integers such that
 their remainder is zero.
@@ -398,9 +402,14 @@ Methods available:
   rate. Following block of code will run a task after an initial delay of 100 ms and after that, it will run the same
   task every 450 ms:
     - `executorService.scheduleAtFixedRate(runnableTask, 100L, 450L, TimeUnit.MILLISECONDS);`
+
+![Scheduled at fixed rate](ScheduledFixedRate.PNG)
+
 - **scheduleWithFixedDelay()**: if it is necessary to have a fixed length delay between iterations of the task.
   Following code will guarantee a 150 ms pause between the end of the current execution and the start of another one:
     - `executorService.scheduleWithFixedDelay(task, 100, 150, TimeUnit.MILLISECONDS);`
+
+![Scheduled with fixed delay](ScheduledFixedDelay.PNG)
 
 **Few common pitfalls of ExecutorService**
 
