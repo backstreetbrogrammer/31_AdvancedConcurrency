@@ -444,6 +444,8 @@ if (task is small enough or no longer divisible) {
 }
 ```
 
+![Fork Join](ForkJoin.PNG)
+
 In practice, this means that the framework first **"forks"** recursively breaking the task into smaller independent
 subtasks until they are simple enough to run asynchronously.
 
@@ -490,9 +492,262 @@ tasks.
 Main point to note is that a task is **NOT** equivalent to a thread! Tasks are lightweight threads so fork-join will be
 efficient even when there are a huge number of tasks.
 
-Fork/Join Framework can handle the problem of **load-balancing** quite efficiently. 
+Fork/Join Framework can handle the problem of **load-balancing** quite efficiently.
 
+**Example 1**
 
+Simple example to demonstrate `RecursiveAction`
+
+```
+    /*
+        fork()   - asynchronous execution of tasks in the pool
+                   we call it when using RecursiveTask<T> or RecursiveAction
+        join()   - returns the result when the computation is finished
+        invoke() - synchronous execution of the given tasks + wait + return the result upon completion
+     */
+```
+
+Using **fork-join**:
+
+```java
+import java.util.concurrent.RecursiveAction;
+
+public class SimpleRecursiveActionForkJoin extends RecursiveAction {
+    private final int taskSize;
+
+    public SimpleRecursiveActionForkJoin(final int taskSize) {
+        this.taskSize = taskSize;
+    }
+
+    @Override
+    protected void compute() {
+        // if the task is large, split it and execute in parallel
+        if (taskSize > 100) {
+            System.out.printf("[%s] Split the tasks [taskSize=%d] and execute in parallel%n",
+                              Thread.currentThread().getName(), taskSize);
+            final SimpleRecursiveActionForkJoin action1 = new SimpleRecursiveActionForkJoin(taskSize / 2);
+            final SimpleRecursiveActionForkJoin action2 = new SimpleRecursiveActionForkJoin(taskSize / 2);
+
+            action1.fork();
+            action2.fork();
+
+            action1.join();
+            action2.join();
+        } else {
+            System.out.printf("[%s] Task [taskSize=%d] is small to be executed in sequence%n", Thread.currentThread().getName(), taskSize);
+            task();
+        }
+    }
+
+    private void task() {
+        // it can be any complex task or algorithm
+        System.out.printf("[%s] The size of the task is %d%n", Thread.currentThread().getName(), taskSize);
+    }
+}
+```
+
+Test class:
+
+```java
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+public class SimpleRecursiveActionForkJoinTest {
+
+    @ParameterizedTest
+    @ValueSource(ints = {
+            400,
+            70
+    })
+    @DisplayName("Test RecursiveAction with different task sizes using fork-join")
+    void testRecursiveActionWithDifferentTaskSizesUsingForkJoin(final int taskSize) {
+        final SimpleRecursiveActionForkJoin action = new SimpleRecursiveActionForkJoin(taskSize);
+        action.invoke();
+        System.out.println("------------------------\n");
+    }
+}
+```
+
+Output:
+
+```
+[main] Split the tasks [taskSize=400] and execute in parallel
+[ForkJoinPool.commonPool-worker-3] Split the tasks [taskSize=200] and execute in parallel
+[ForkJoinPool.commonPool-worker-5] Split the tasks [taskSize=200] and execute in parallel
+[ForkJoinPool.commonPool-worker-5] Task [taskSize=100] is small to be executed in sequence
+[ForkJoinPool.commonPool-worker-3] Task [taskSize=100] is small to be executed in sequence
+[ForkJoinPool.commonPool-worker-3] The size of the task is 100
+[ForkJoinPool.commonPool-worker-7] Task [taskSize=100] is small to be executed in sequence
+[ForkJoinPool.commonPool-worker-7] The size of the task is 100
+[ForkJoinPool.commonPool-worker-5] The size of the task is 100
+[ForkJoinPool.commonPool-worker-3] Task [taskSize=100] is small to be executed in sequence
+[ForkJoinPool.commonPool-worker-3] The size of the task is 100
+------------------------
+
+[main] Task [taskSize=70] is small to be executed in sequence
+[main] The size of the task is 70
+------------------------
+```
+
+Using **invoke**:
+
+```java
+import java.util.concurrent.RecursiveAction;
+
+public class SimpleRecursiveActionInvokeAll extends RecursiveAction {
+    private final int taskSize;
+
+    public SimpleRecursiveActionInvokeAll(final int taskSize) {
+        this.taskSize = taskSize;
+    }
+
+    @Override
+    protected void compute() {
+        // if the task is large, split it and execute in parallel
+        if (taskSize > 100) {
+            System.out.printf("[%s] Split the tasks [taskSize=%d] and execute in parallel%n",
+                              Thread.currentThread().getName(), taskSize);
+            final SimpleRecursiveActionInvokeAll action1 = new SimpleRecursiveActionInvokeAll(taskSize / 2);
+            final SimpleRecursiveActionInvokeAll action2 = new SimpleRecursiveActionInvokeAll(taskSize / 2);
+
+            invokeAll(action1, action2);
+        } else {
+            System.out.printf("[%s] Task [taskSize=%d] is small to be executed in sequence%n", Thread.currentThread().getName(), taskSize);
+            task();
+        }
+    }
+
+    private void task() {
+        // it can be any complex task or algorithm
+        System.out.printf("[%s] The size of the task is %d%n", Thread.currentThread().getName(), taskSize);
+    }
+}
+```
+
+Test class:
+
+```java
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+public class SimpleRecursiveActionInvokeAllTest {
+
+    @ParameterizedTest
+    @ValueSource(ints = {
+            400,
+            70
+    })
+    @DisplayName("Test RecursiveAction with different task sizes using invokeAll()")
+    void testRecursiveActionWithDifferentTaskSizesUsingInvokeAll(final int taskSize) {
+        final SimpleRecursiveActionInvokeAll action = new SimpleRecursiveActionInvokeAll(taskSize);
+        action.invoke();
+        System.out.println("------------------------\n");
+    }
+}
+```
+
+Output:
+
+```
+[main] Split the tasks [taskSize=400] and execute in parallel
+[main] Split the tasks [taskSize=200] and execute in parallel
+[main] Task [taskSize=100] is small to be executed in sequence
+[main] The size of the task is 100
+[ForkJoinPool.commonPool-worker-3] Task [taskSize=100] is small to be executed in sequence
+[ForkJoinPool.commonPool-worker-3] The size of the task is 100
+[ForkJoinPool.commonPool-worker-5] Split the tasks [taskSize=200] and execute in parallel
+[ForkJoinPool.commonPool-worker-5] Task [taskSize=100] is small to be executed in sequence
+[ForkJoinPool.commonPool-worker-5] The size of the task is 100
+[ForkJoinPool.commonPool-worker-7] Task [taskSize=100] is small to be executed in sequence
+[ForkJoinPool.commonPool-worker-7] The size of the task is 100
+------------------------
+
+[main] Task [taskSize=70] is small to be executed in sequence
+[main] The size of the task is 70
+------------------------
+```
+
+#### Interview Problem 3 (Jane Street): Printing integers in parallel
+
+Design a parallel algorithm to print all the integer values in a List.
+
+We can split the array of integers into smaller sub-arrays until there are <2 items left. We can use the sequential
+approach with these small sub-arrays.
+
+**Solution**
+
+```java
+import java.util.List;
+import java.util.concurrent.RecursiveAction;
+
+public class PrintIntegersInParallel extends RecursiveAction {
+
+    private final List<Integer> nums;
+
+    public PrintIntegersInParallel(final List<Integer> nums) {
+        this.nums = nums;
+    }
+
+    @Override
+    protected void compute() {
+        // the problem is small enough (containing 2 items) => sequential print operation
+        if (nums.size() < 2) {
+            for (final Integer num : nums)
+                System.out.printf("[%s]num=%d%n", Thread.currentThread().getName(), num);
+        } else {
+            /* otherwise, we split the problem into 2 sub-problems:
+                   [a,b,c] --> [a] and [b,c]
+                   [a,b,c,d] --> [a,b] and [c,d]
+             */
+            final List<Integer> left = nums.subList(0, nums.size() / 2);
+            final List<Integer> right = nums.subList(nums.size() / 2, nums.size());
+
+            final PrintIntegersInParallel action1 = new PrintIntegersInParallel(left);
+            final PrintIntegersInParallel action2 = new PrintIntegersInParallel(right);
+
+            invokeAll(action1, action2); // or can use fork(), join() too
+        }
+    }
+}
+```
+
+Test class:
+
+```java
+import org.junit.jupiter.api.Test;
+
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+public class PrintIntegersInParallelTest {
+
+    @Test
+    void testPrintingIntegersInParallel() {
+        final var myList = Stream.iterate(1, n -> n + 1)
+                                 .limit(10L)
+                                 .collect(Collectors.toList());
+        final PrintIntegersInParallel printAction = new PrintIntegersInParallel(myList);
+        printAction.invoke();
+    }
+}
+```
+
+Sample output:
+
+```
+[main]num=1
+[ForkJoinPool.commonPool-worker-7]num=2
+[ForkJoinPool.commonPool-worker-7]num=4
+[ForkJoinPool.commonPool-worker-5]num=6
+[ForkJoinPool.commonPool-worker-7]num=5
+[ForkJoinPool.commonPool-worker-3]num=3
+[ForkJoinPool.commonPool-worker-7]num=8
+[ForkJoinPool.commonPool-worker-5]num=7
+[ForkJoinPool.commonPool-worker-7]num=10
+[ForkJoinPool.commonPool-worker-3]num=9
+```
 
 ---
 
