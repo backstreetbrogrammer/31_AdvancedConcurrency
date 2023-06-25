@@ -1,5 +1,7 @@
 package com.backstreetbrogrammer.ch02_forkJoin;
 
+import java.util.concurrent.ForkJoinPool;
+
 public class ForkJoinPoolSimpleDemo {
 
     /*
@@ -10,8 +12,9 @@ public class ForkJoinPoolSimpleDemo {
      */
 
     public static void main(final String[] args) {
+        final ForkJoinPool pool = new ForkJoinPool();
         final SimpleRecursiveActionForkJoin action = new SimpleRecursiveActionForkJoin(400);
-        action.invoke(); // synchronous
+        pool.invoke(action);
     }
 
 }

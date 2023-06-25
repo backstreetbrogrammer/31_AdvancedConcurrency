@@ -1,4 +1,4 @@
-# Advanced Concurrency
+# Advanced Concurrency - Module 1
 
 > This is a tutorials course covering advanced concurrency in Java.
 
@@ -13,10 +13,6 @@ Tools used:
 
 1. [Executor Pattern, Callable and Future](https://github.com/backstreetbrogrammer/31_AdvancedConcurrency#chapter-01-executor-pattern-callable-and-future)
 2. [Fork/Join Framework](https://github.com/backstreetbrogrammer/31_AdvancedConcurrency#chapter-02-forkjoin-framework)
-3. [Advanced Locking and Semaphores](https://github.com/backstreetbrogrammer/31_AdvancedConcurrency#chapter-03-advanced-locking-and-semaphores)
-4. [Using Barriers and Latches](https://github.com/backstreetbrogrammer/31_AdvancedConcurrency#chapter-04-using-barriers-and-latches)
-5. [CAS operation and Atomic classes](https://github.com/backstreetbrogrammer/31_AdvancedConcurrency#chapter-05-cas-operation-and-atomic-classes)
-6. [Concurrent Collections](https://github.com/backstreetbrogrammer/31_AdvancedConcurrency#chapter-06-concurrent-collections)
 
 ---
 
@@ -749,19 +745,584 @@ Sample output:
 [ForkJoinPool.commonPool-worker-3]num=9
 ```
 
+**Example 2**
+
+Simple example to demonstrate `RecursiveTask<T>`
+
+```java
+import java.util.concurrent.RecursiveTask;
+
+public class SimpleRecursiveTask extends RecursiveTask<Double> {
+    private final double num;
+
+    public SimpleRecursiveTask(final double num) {
+        this.num = num;
+    }
+
+    @Override
+    protected Double compute() {
+        // if the number is large, split it and execute in parallel
+        if (num > 100D) {
+            System.out.printf("[%s] Split the tasks [num=%.2f] and execute in parallel%n",
+                              Thread.currentThread().getName(), num);
+            final SimpleRecursiveTask task1 = new SimpleRecursiveTask(num / 2);
+            final SimpleRecursiveTask task2 = new SimpleRecursiveTask(num / 2);
+
+            task1.fork();
+            task2.fork();
+
+            // wait for the tasks to complete
+            double subResult = 0D;
+            subResult += task1.join();
+            subResult += task2.join();
+
+            return subResult;
+        } else {
+            System.out.printf("[%s] Task [num=%.2f] is small to be executed in sequence%n",
+                              Thread.currentThread().getName(), num);
+            return task();
+        }
+    }
+
+    private Double task() {
+        // it can be any complex task or algorithm
+        final double result = num * num;
+        System.out.printf("[%s] The square of the num %.2f is %.2f%n", Thread.currentThread().getName(), num, result);
+        return result;
+    }
+}
+```
+
+Test class:
+
+```java
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.concurrent.ForkJoinPool;
+
+public class SimpleRecursiveTaskTest {
+
+    @ParameterizedTest
+    @ValueSource(doubles = {
+            400D,
+            70D
+    })
+    @DisplayName("Test RecursiveTask using fork-join")
+    void testRecursiveTaskUsingForkJoin(final double num) {
+        final ForkJoinPool pool = new ForkJoinPool();
+        final SimpleRecursiveTask task = new SimpleRecursiveTask(num);
+        final double squareOfNum = pool.invoke(task);
+        System.out.printf("%.2f%n------------------------%n%n", squareOfNum);
+    }
+
+}
+```
+
+Sample output:
+
+```
+[ForkJoinPool-1-worker-3] Split the tasks [num=400.00] and execute in parallel
+[ForkJoinPool-1-worker-3] Split the tasks [num=200.00] and execute in parallel
+[ForkJoinPool-1-worker-3] Task [num=100.00] is small to be executed in sequence
+[ForkJoinPool-1-worker-3] The square of the num 100.00 is 10000.00
+[ForkJoinPool-1-worker-3] Task [num=100.00] is small to be executed in sequence
+[ForkJoinPool-1-worker-3] The square of the num 100.00 is 10000.00
+[ForkJoinPool-1-worker-5] Split the tasks [num=200.00] and execute in parallel
+[ForkJoinPool-1-worker-5] Task [num=100.00] is small to be executed in sequence
+[ForkJoinPool-1-worker-5] The square of the num 100.00 is 10000.00
+[ForkJoinPool-1-worker-1] Task [num=100.00] is small to be executed in sequence
+[ForkJoinPool-1-worker-1] The square of the num 100.00 is 10000.00
+40000.00
+------------------------
+
+[ForkJoinPool-2-worker-3] Task [num=70.00] is small to be executed in sequence
+[ForkJoinPool-2-worker-3] The square of the num 70.00 is 4900.00
+4900.00
+------------------------
+```
+
+#### Interview Problem 4 (Jane Street): Fibonacci-numbers
+
+Design a parallel algorithm to calculate the n-th Fibonacci-numbers.
+
+```
+F(N) = F(N-1) + F(N-2) 
+```
+
+This is recursive formula we can use.
+
+**Solution**
+
+Main solution class:
+
+```java
+import java.util.concurrent.RecursiveTask;
+
+public class FibonacciTask extends RecursiveTask<Long> {
+
+    private final long num;
+
+    public FibonacciTask(final long num) {
+        this.num = num;
+    }
+
+    @Override
+    protected Long compute() {
+        // F(0) = F(1) = 0
+        if (num <= 1L)
+            return num;
+
+        // F(N) = F(N-1) + F(N-2)
+        final FibonacciTask fib1 = new FibonacciTask(num - 1);
+        final FibonacciTask fib2 = new FibonacciTask(num - 2);
+
+        fib1.fork();
+        fib2.fork();
+
+        return fib1.join() + fib2.join();
+    }
+}
+```
+
+However, we can do some thread optimisations by just using the same calling thread to compute.
+
+```java
+import java.util.concurrent.RecursiveTask;
+
+public class OptimisedFibonacciTask extends RecursiveTask<Long> {
+
+    private final long num;
+
+    public OptimisedFibonacciTask(final long num) {
+        this.num = num;
+    }
+
+    @Override
+    protected Long compute() {
+        // F(0) = F(1) = 0
+        if (num <= 1L)
+            return num;
+
+        // F(N) = F(N-1) + F(N-2)
+        final OptimisedFibonacciTask fib1 = new OptimisedFibonacciTask(num - 1);
+        final OptimisedFibonacciTask fib2 = new OptimisedFibonacciTask(num - 2);
+
+        fib2.fork();
+
+        return fib1.compute() + fib2.join();
+    }
+}
+```
+
+Test class:
+
+```java
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.concurrent.ForkJoinPool;
+
+public class FibonacciTaskTest {
+
+    private ForkJoinPool pool;
+
+    @BeforeEach
+    void setUp() {
+        pool = new ForkJoinPool();
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {
+            25L,
+            10L,
+            6L
+    })
+    @DisplayName("Test to calculate the n-th Fibonacci-numbers")
+    void testCalculateNthFibonacciNumber(final long num) {
+        final FibonacciTask task = new FibonacciTask(num);
+        final long nthFibNum = pool.invoke(task);
+        System.out.printf("[%d]th Fibonacci Number = [%d]%n------------------------%n%n", num, nthFibNum);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {
+            25L,
+            10L,
+            6L
+    })
+    @DisplayName("Test to calculate the n-th Fibonacci-numbers in optimised way")
+    void testCalculateNthFibonacciNumberOptimised(final long num) {
+        final OptimisedFibonacciTask task = new OptimisedFibonacciTask(num);
+        final long nthFibNum = pool.invoke(task);
+        System.out.printf("[%d]th Fibonacci Number = [%d]%n------------------------%n%n", num, nthFibNum);
+    }
+
+}
+```
+
+Sample Output for both the test cases:
+
+```
+[25]th Fibonacci Number = [75025]
+------------------------
+
+[10]th Fibonacci Number = [55]
+------------------------
+
+[6]th Fibonacci Number = [8]
+------------------------
+```
+
+#### Interview Problem 5 (JP Morgan): Maximum Finding
+
+Design an algorithm to find the maximum element in a given list of numbers.
+
+**Follow up**: Can we design a parallel algorithm to find the maximum element and have better time complexity than O(n)?
+
+**Solution**
+
+We can do a linear search and find the maximum in a given list of numbers which are NOT sorted.
+
+```java
+public class SequentialMaxFinding {
+    private final long[] nums;
+
+    public SequentialMaxFinding(final long[] nums) {
+        this.nums = nums;
+    }
+
+    // Time complexity: O(n)
+    // assumption: nums[] is not sorted
+    public long max() {
+        long max = nums[0];
+        for (int i = 1; i < nums.length; i++) {
+            if (nums[i] > max) {
+                max = nums[i];
+            }
+        }
+        return max;
+    }
+}
+```
+
+Sorting an array will require `O(n * logn)` time complexity which is greater than `O(n)`. Thus, we can NOT apply binary
+search to find the maximum.
+
+Using fork-join framework:
+
+```java
+import java.util.concurrent.RecursiveTask;
+
+public class ParallelMaxFinding extends RecursiveTask<Long> {
+    private final long[] nums;
+    private final int lowIndex;
+    private final int highIndex;
+
+    public ParallelMaxFinding(final long[] nums, final int lowIndex, final int highIndex) {
+        this.nums = nums;
+        this.lowIndex = lowIndex;
+        this.highIndex = highIndex;
+    }
+
+    @Override
+    protected Long compute() {
+        // if the array is small - we can use sequential max finding algorithm
+        if ((highIndex - lowIndex) < 5000) {
+            return sequentialMaxFinding();
+        } else {
+            // use parallelization
+            final int middleIndex = lowIndex + (highIndex - lowIndex) / 2;
+            final ParallelMaxFinding task1 = new ParallelMaxFinding(nums, lowIndex, middleIndex);
+            final ParallelMaxFinding task2 = new ParallelMaxFinding(nums, middleIndex + 1, highIndex);
+
+            invokeAll(task1, task2);
+
+            return Math.max(task1.join(), task2.join());
+        }
+    }
+
+    // Time complexity: O(n)
+    // assumption: nums[] is not sorted
+    public Long sequentialMaxFinding() {
+        long max = nums[lowIndex];
+        for (int i = lowIndex + 1; i < highIndex; i++) {
+            if (nums[i] > max) {
+                max = nums[i];
+            }
+        }
+        return max;
+    }
+}
+```
+
+Test class:
+
+```java
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ThreadLocalRandom;
+
+public class ParallelMaxFindingTest {
+
+    private static final int dataSize = 500_000_000;
+    private static final long[] data = new long[dataSize];
+    private final int noOfIterations = 10;
+
+    @BeforeAll
+    static void beforeAll() {
+        for (int i = 0; i < dataSize; i++) {
+            data[i] = ThreadLocalRandom.current().nextLong(dataSize);
+        }
+    }
+
+    @Test
+    @DisplayName("Test SequentialMaxFinding")
+    void testSequentialMaxFinding() {
+        final SequentialMaxFinding maxFinding = new SequentialMaxFinding(data);
+        final var start = Instant.now();
+        long max = 0L;
+        for (int i = 0; i < noOfIterations; i++) {
+            max = maxFinding.max();
+        }
+        final long timeElapsed = (Duration.between(start, Instant.now()).toMillis()) / noOfIterations;
+        System.out.printf("[SequentialMaxFinding] time taken: %d ms for size: %d; MAX=[%d]%n%n",
+                          timeElapsed, dataSize, max);
+        System.out.println("---------------------------------------");
+    }
+
+    @Test
+    @DisplayName("Test ParallelMaxFinding")
+    void testParallelMaxFinding() {
+        final ForkJoinPool pool = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
+        final ParallelMaxFinding maxFinding = new ParallelMaxFinding(data, 0, data.length);
+        final var start = Instant.now();
+        long max = 0L;
+        for (int i = 0; i < noOfIterations; i++) {
+            max = pool.invoke(maxFinding);
+        }
+        final long timeElapsed = (Duration.between(start, Instant.now()).toMillis()) / noOfIterations;
+        System.out.printf("[ParallelMaxFinding] time taken: %d ms for size: %d; MAX=[%d]%n%n",
+                          timeElapsed, dataSize, max);
+        System.out.println("---------------------------------------");
+    }
+
+}
+```
+
+Sample output:
+
+```
+[SequentialMaxFinding] time taken: 373 ms for size: 500000000; MAX=[499999999]
+
+---------------------------------------
+[ParallelMaxFinding] time taken: 38 ms for size: 500000000; MAX=[499999999]
+
+---------------------------------------
+```
+
+#### Interview Problem 6 (Societe Generale): Merge Sort
+
+Implement merge sort algorithm.
+
+**Follow up**: Can we design a parallel algorithm for merge sort?
+
+**Solution**
+
+Sequential merge sort algorithm - Time Complexity: `O(n * logn)`
+
+```java
+import java.util.Arrays;
+
+public class SequentialMergeSort {
+
+    private final long[] nums;
+
+    public SequentialMergeSort(final long[] nums) {
+        this.nums = nums;
+    }
+
+    public void sequentialMergeSort() {
+        mergeSort(nums);
+    }
+
+    private void mergeSort(final long[] nums) {
+        if (nums.length <= 1) {
+            return;
+        }
+
+        final int middleIndex = nums.length / 2;
+
+        final long[] left = Arrays.copyOfRange(nums, 0, middleIndex);
+        final long[] right = Arrays.copyOfRange(nums, middleIndex + 1, nums.length);
+
+        mergeSort(left);
+        mergeSort(right);
+
+        merge(left, right, nums);
+    }
+
+    private void merge(final long[] leftSubArray, final long[] rightSubArray, final long[] originalArray) {
+        int i = 0, j = 0, k = 0;
+
+        while (i < leftSubArray.length && j < rightSubArray.length) {
+            if (leftSubArray[i] < rightSubArray[j]) {
+                originalArray[k++] = leftSubArray[i++];
+            } else {
+                originalArray[k++] = rightSubArray[j++];
+            }
+        }
+
+        while (i < leftSubArray.length) {
+            originalArray[k++] = leftSubArray[i++];
+        }
+
+        while (j < rightSubArray.length) {
+            originalArray[k++] = rightSubArray[j++];
+        }
+    }
+}
+```
+
+Parallel Merge Sort
+
+```java
+import java.util.Arrays;
+import java.util.concurrent.RecursiveAction;
+
+public class ParallelMergeSort extends RecursiveAction {
+
+    private final long[] nums;
+
+    public ParallelMergeSort(final long[] nums) {
+        this.nums = nums;
+    }
+
+    @Override
+    protected void compute() {
+        if (nums.length <= 5000) {
+            // sequential merge sort
+            mergeSort(nums);
+            return;
+        }
+
+        final int middleIndex = nums.length / 2;
+        final long[] left = Arrays.copyOfRange(nums, 0, middleIndex);
+        final long[] right = Arrays.copyOfRange(nums, middleIndex + 1, nums.length);
+
+        final ParallelMergeSort task1 = new ParallelMergeSort(left);
+        final ParallelMergeSort task2 = new ParallelMergeSort(right);
+
+        invokeAll(task1, task2);
+
+        merge(left, right, nums);
+    }
+
+    private void mergeSort(final long[] nums) {
+        if (nums.length <= 1) {
+            return;
+        }
+
+        final int middleIndex = nums.length / 2;
+
+        final long[] left = Arrays.copyOfRange(nums, 0, middleIndex);
+        final long[] right = Arrays.copyOfRange(nums, middleIndex + 1, nums.length);
+
+        mergeSort(left);
+        mergeSort(right);
+
+        merge(left, right, nums);
+    }
+
+    private void merge(final long[] leftSubArray, final long[] rightSubArray, final long[] originalArray) {
+        int i = 0, j = 0, k = 0;
+
+        while (i < leftSubArray.length && j < rightSubArray.length) {
+            if (leftSubArray[i] < rightSubArray[j]) {
+                originalArray[k++] = leftSubArray[i++];
+            } else {
+                originalArray[k++] = rightSubArray[j++];
+            }
+        }
+
+        while (i < leftSubArray.length) {
+            originalArray[k++] = leftSubArray[i++];
+        }
+
+        while (j < rightSubArray.length) {
+            originalArray[k++] = rightSubArray[j++];
+        }
+    }
+}
+```
+
+Test class:
+
+```java
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ThreadLocalRandom;
+
+public class ParallelMergeSortTest {
+    private static final int dataSize = 100_000_000;
+    private static final long[] data = new long[dataSize];
+
+    @BeforeAll
+    static void beforeAll() {
+        for (int i = 0; i < dataSize; i++) {
+            data[i] = ThreadLocalRandom.current().nextLong(dataSize);
+        }
+    }
+
+    @Test
+    @DisplayName("Test SequentialMergeSort")
+    void testSequentialMergeSort() {
+        final SequentialMergeSort mergeSort = new SequentialMergeSort(data);
+        final var start = Instant.now();
+        mergeSort.sequentialMergeSort();
+        final long timeElapsed = (Duration.between(start, Instant.now()).toMillis());
+        System.out.printf("[SequentialMergeSort] time taken: %d ms to sort array of size: %d%n%n",
+                          timeElapsed, dataSize);
+        System.out.println("---------------------------------------");
+    }
+
+    @Test
+    @DisplayName("Test ParallelMergeSort")
+    void testParallelMergeSort() {
+        final ForkJoinPool pool = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
+        final ParallelMergeSort mergeSort = new ParallelMergeSort(data);
+        final var start = Instant.now();
+        pool.invoke(mergeSort);
+        final long timeElapsed = (Duration.between(start, Instant.now()).toMillis());
+        System.out.printf("[ParallelMergeSort] time taken: %d ms to sort array of size: %d%n%n",
+                          timeElapsed, dataSize);
+        System.out.println("---------------------------------------");
+    }
+}
+```
+
+Sample output:
+
+```
+[SequentialMergeSort] time taken: 22946 ms to sort array of size: 100000000
+
+---------------------------------------
+[ParallelMergeSort] time taken: 9266 ms to sort array of size: 100000000
+
+---------------------------------------
+```
+
 ---
-
-### Chapter 03. Advanced Locking and Semaphores
-
----
-
-### Chapter 04. Using Barriers and Latches
-
----
-
-### Chapter 05. CAS operation and Atomic classes
-
----
-
-### Chapter 06. Concurrent Collections
-
